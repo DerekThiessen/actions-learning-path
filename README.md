@@ -13,3 +13,32 @@ Click Create repository from template and we’re ready to build our first Actio
 
 
 If you have arrived here from the [Intermediate automation strategies with GitHub Actions](https://resources.github.com/learn/pathways/automation/intermediate/workflow-automation-with-github-actions/) module without following the first module, copy the contents of the `/demo-files` folder into the `.github/workflows` folder to follow along.
+
+## .NET Build Template
+
+This repository now includes a reusable workflow template for building .NET applications! The template provides:
+
+- ✨ **Reusable workflow** for .NET builds across multiple projects
+- 🚀 **Configurable settings** for .NET version, build configuration, and more  
+- 🧪 **Automated testing** with code coverage collection
+- 📦 **Artifact publishing** for distributing your applications
+- 🔄 **Caching support** for faster builds
+- 🌐 **Cross-platform** support (Linux, Windows, macOS)
+
+### Quick Start
+
+1. Check out the **`dotnet-example/`** directory for a complete working example
+2. Use the **`.github/workflows/dotnet-build-template.yml`** in your own projects
+3. See **`dotnet-example/README.md`** for detailed usage instructions
+
+### Example Usage
+
+```yaml
+jobs:
+  build:
+    uses: ./.github/workflows/dotnet-build-template.yml
+    with:
+      dotnet-version: '8.x'
+      project-path: './src'
+      publish-artifacts: true
+```

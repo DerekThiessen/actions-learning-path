@@ -1,0 +1,124 @@
+name: .NET Build Template
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: '.NET version to use'
+        required: false
+        type: string
+        default: '6.x'
+      project-path:
+        description: 'Path to the .NET project or solution file'
+        required: false
+        type: string
+        default: '.'
+      build-configuration:
+        description: 'Build configuration (Debug/Release)'
+        required: false
+        type: string
+        default: 'Release'
+      run-tests:
+        description: 'Whether to run tests'
+        required: false
+        type: boolean
+        default: true
+      publish-artifacts:
+        description: 'Whether to publish build artifacts'
+        required: false
+        type: boolean
+        default: false
+      artifact-name:
+        description: 'Name for the published artifact'
+        required: false
+        type: string
+        default: 'dotnet-app'
+      runs-on:
+        description: 'Runner to use'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+    outputs:
+      build-status:
+        description: 'Status of the build'
+        value: ${{ jobs.build.result }}
+      test-status:
+        description: 'Status of the tests'
+        value: ${{ jobs.test.result }}
+
+jobs:
+  build:
+    name: Build .NET Application
+    runs-on: ${{ inputs.runs-on }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          
+      - name: Cache .NET packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/*.vbproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+            
+      - name: Restore dependencies
+        run: dotnet restore ${{ inputs.project-path }}
+        
+      - name: Build application
+        run: dotnet build ${{ inputs.project-path }} --configuration ${{ inputs.build-configuration }} --no-restore
+        
+      - name: Publish application
+        if: ${{ inputs.publish-artifacts }}
+        run: dotnet publish ${{ inputs.project-path }} --configuration ${{ inputs.build-configuration }} --no-build --output ./publish
+        
+      - name: Upload build artifacts
+        if: ${{ inputs.publish-artifacts }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ./publish
+          retention-days: 30
+
+  test:
+    name: Run Tests
+    runs-on: ${{ inputs.runs-on }}
+    needs: build
+    if: ${{ inputs.run-tests }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          
+      - name: Cache .NET packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/*.vbproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+            
+      - name: Restore dependencies
+        run: dotnet restore ${{ inputs.project-path }}
+        
+      - name: Run tests
+        run: dotnet test ${{ inputs.project-path }} --configuration ${{ inputs.build-configuration }} --no-restore --verbosity normal --collect:"XPlat Code Coverage"
+        
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ inputs.artifact-name }}
+          path: '**/coverage.cobertura.xml'
+          retention-days: 30
