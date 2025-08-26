@@ -1,0 +1,48 @@
+name: .NET Example Build
+
+on:
+  push:
+    branches: [ main, copilot/** ]
+    paths: 
+      - 'dotnet-example/**'
+      - '.github/workflows/dotnet-example.yml'
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'dotnet-example/**'
+      - '.github/workflows/dotnet-example.yml'
+  workflow_dispatch:
+
+jobs:
+  # Example using the reusable template with default settings
+  build-default:
+    name: Build with Defaults
+    uses: ./.github/workflows/dotnet-build-template.yml
+    with:
+      project-path: './dotnet-example'
+      
+  # Example using the reusable template with custom settings
+  build-custom:
+    name: Build with Custom Settings
+    uses: ./.github/workflows/dotnet-build-template.yml
+    with:
+      dotnet-version: '8.x'
+      project-path: './dotnet-example'
+      build-configuration: 'Release'
+      run-tests: true
+      publish-artifacts: true
+      artifact-name: 'hello-world-app'
+      runs-on: 'ubuntu-latest'
+      
+  # Example showing multiple .NET versions (matrix build)
+  build-matrix:
+    name: Multi-Version Build
+    strategy:
+      matrix:
+        dotnet-version: ['6.x', '8.x']
+    uses: ./.github/workflows/dotnet-build-template.yml
+    with:
+      dotnet-version: ${{ matrix.dotnet-version }}
+      project-path: './dotnet-example'
+      build-configuration: 'Release'
+      artifact-name: 'hello-world-app-${{ matrix.dotnet-version }}'
