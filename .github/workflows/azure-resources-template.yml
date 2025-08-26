@@ -1,0 +1,309 @@
+name: Azure Resources Deployment Template
+
+on:
+  workflow_call:
+    inputs:
+      resource_group_name:
+        description: 'Name of the Azure Resource Group'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment (dev, staging, prod)'
+        required: true
+        type: string
+      location:
+        description: 'Azure region for resources'
+        required: true
+        type: string
+        default: 'East US'
+      deploy_app_service:
+        description: 'Deploy Azure App Service'
+        required: false
+        type: boolean
+        default: false
+      app_service_name:
+        description: 'Name for the App Service (required if deploy_app_service is true)'
+        required: false
+        type: string
+      app_service_plan_sku:
+        description: 'App Service Plan SKU'
+        required: false
+        type: string
+        default: 'F1'
+      deploy_key_vault:
+        description: 'Deploy Azure Key Vault'
+        required: false
+        type: boolean
+        default: false
+      key_vault_name:
+        description: 'Name for the Key Vault (required if deploy_key_vault is true)'
+        required: false
+        type: string
+      deploy_storage_account:
+        description: 'Deploy Azure Storage Account'
+        required: false
+        type: boolean
+        default: false
+      storage_account_name:
+        description: 'Name for the Storage Account (required if deploy_storage_account is true)'
+        required: false
+        type: string
+      storage_account_type:
+        description: 'Storage Account type'
+        required: false
+        type: string
+        default: 'Standard_LRS'
+      deploy_sql_database:
+        description: 'Deploy Azure SQL Database'
+        required: false
+        type: boolean
+        default: false
+      sql_server_name:
+        description: 'Name for the SQL Server (required if deploy_sql_database is true)'
+        required: false
+        type: string
+      sql_database_name:
+        description: 'Name for the SQL Database (required if deploy_sql_database is true)'
+        required: false
+        type: string
+      sql_admin_login:
+        description: 'SQL Server administrator login'
+        required: false
+        type: string
+        default: 'azureuser'
+      terraform_version:
+        description: 'Terraform version to use'
+        required: false
+        type: string
+        default: '1.5.7'
+      working_directory:
+        description: 'Working directory for Terraform files'
+        required: false
+        type: string
+        default: './terraform'
+      auto_approve:
+        description: 'Auto-approve Terraform apply (use with caution)'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AZURE_CLIENT_ID:
+        description: 'Azure Client ID for authentication'
+        required: true
+      AZURE_CLIENT_SECRET:
+        description: 'Azure Client Secret for authentication'
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure Subscription ID'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'Azure Tenant ID'
+        required: true
+      SQL_ADMIN_PASSWORD:
+        description: 'SQL Server administrator password (required if deploy_sql_database is true)'
+        required: false
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate App Service inputs
+        if: inputs.deploy_app_service == true
+        run: |
+          if [ -z "${{ inputs.app_service_name }}" ]; then
+            echo "Error: app_service_name is required when deploy_app_service is true"
+            exit 1
+          fi
+          
+      - name: Validate Key Vault inputs
+        if: inputs.deploy_key_vault == true
+        run: |
+          if [ -z "${{ inputs.key_vault_name }}" ]; then
+            echo "Error: key_vault_name is required when deploy_key_vault is true"
+            exit 1
+          fi
+          
+      - name: Validate Storage Account inputs
+        if: inputs.deploy_storage_account == true
+        run: |
+          if [ -z "${{ inputs.storage_account_name }}" ]; then
+            echo "Error: storage_account_name is required when deploy_storage_account is true"
+            exit 1
+          fi
+          
+      - name: Validate SQL Database inputs
+        if: inputs.deploy_sql_database == true
+        run: |
+          if [ -z "${{ inputs.sql_server_name }}" ] || [ -z "${{ inputs.sql_database_name }}" ]; then
+            echo "Error: sql_server_name and sql_database_name are required when deploy_sql_database is true"
+            exit 1
+          fi
+
+  terraform-plan:
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    outputs:
+      tfplanExitCode: ${{ steps.tf-plan.outputs.exitcode }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: false
+          
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+            
+      - name: Generate Terraform variables file
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          cat > terraform.tfvars <<EOF
+          resource_group_name = "${{ inputs.resource_group_name }}"
+          environment = "${{ inputs.environment }}"
+          location = "${{ inputs.location }}"
+          deploy_app_service = ${{ inputs.deploy_app_service }}
+          app_service_name = "${{ inputs.app_service_name }}"
+          app_service_plan_sku = "${{ inputs.app_service_plan_sku }}"
+          deploy_key_vault = ${{ inputs.deploy_key_vault }}
+          key_vault_name = "${{ inputs.key_vault_name }}"
+          deploy_storage_account = ${{ inputs.deploy_storage_account }}
+          storage_account_name = "${{ inputs.storage_account_name }}"
+          storage_account_type = "${{ inputs.storage_account_type }}"
+          deploy_sql_database = ${{ inputs.deploy_sql_database }}
+          sql_server_name = "${{ inputs.sql_server_name }}"
+          sql_database_name = "${{ inputs.sql_database_name }}"
+          sql_admin_login = "${{ inputs.sql_admin_login }}"
+          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
+          EOF
+          
+      - name: Terraform Init
+        id: tf-init
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform init
+        
+      - name: Terraform Plan
+        id: tf-plan
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          export exitcode=0
+          terraform plan -detailed-exitcode -no-color -out tfplan || export exitcode=$?
+          
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          
+          if [ $exitcode -eq 1 ]; then
+            echo "Terraform Plan Failed"
+            exit 1
+          else 
+            exit 0
+          fi
+          
+      - name: Publish Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}-${{ github.run_number }}
+          path: ${{ inputs.working_directory }}/tfplan
+          
+      - name: Create String Output
+        id: tf-plan-string
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          TERRAFORM_PLAN=$(terraform show -no-color tfplan)
+          
+          delimiter="$(openssl rand -hex 8)"
+          echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+          echo "## Terraform Plan Output" >> $GITHUB_OUTPUT
+          echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo '```terraform' >> $GITHUB_OUTPUT
+          echo "$TERRAFORM_PLAN" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "</details>" >> $GITHUB_OUTPUT
+          echo "${delimiter}" >> $GITHUB_OUTPUT
+          
+      - name: Publish Terraform Plan to Task Summary
+        env:
+          SUMMARY: ${{ steps.tf-plan-string.outputs.summary }}
+        run: |
+          echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+
+  terraform-apply:
+    needs: [validate-inputs, terraform-plan]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: needs.terraform-plan.outputs.tfplanExitCode == 2
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: false
+          
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+            
+      - name: Generate Terraform variables file
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          cat > terraform.tfvars <<EOF
+          resource_group_name = "${{ inputs.resource_group_name }}"
+          environment = "${{ inputs.environment }}"
+          location = "${{ inputs.location }}"
+          deploy_app_service = ${{ inputs.deploy_app_service }}
+          app_service_name = "${{ inputs.app_service_name }}"
+          app_service_plan_sku = "${{ inputs.app_service_plan_sku }}"
+          deploy_key_vault = ${{ inputs.deploy_key_vault }}
+          key_vault_name = "${{ inputs.key_vault_name }}"
+          deploy_storage_account = ${{ inputs.deploy_storage_account }}
+          storage_account_name = "${{ inputs.storage_account_name }}"
+          storage_account_type = "${{ inputs.storage_account_type }}"
+          deploy_sql_database = ${{ inputs.deploy_sql_database }}
+          sql_server_name = "${{ inputs.sql_server_name }}"
+          sql_database_name = "${{ inputs.sql_database_name }}"
+          sql_admin_login = "${{ inputs.sql_admin_login }}"
+          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
+          EOF
+          
+      - name: Terraform Init
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform init
+        
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}-${{ github.run_number }}
+          path: ${{ inputs.working_directory }}
+          
+      - name: Terraform Apply
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          if [ "${{ inputs.auto_approve }}" == "true" ]; then
+            terraform apply -auto-approve tfplan
+          else
+            echo "Manual approval required. Use auto_approve: true to skip manual approval."
+            echo "Apply the plan with: terraform apply tfplan"
+            terraform apply tfplan
+          fi

@@ -1,0 +1,126 @@
+name: Example - Deploy Azure Resources
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'terraform/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      deploy_app_service:
+        description: 'Deploy App Service'
+        type: boolean
+        default: true
+      deploy_key_vault:
+        description: 'Deploy Key Vault'
+        type: boolean
+        default: true
+      deploy_storage_account:
+        description: 'Deploy Storage Account'
+        type: boolean
+        default: false
+      deploy_sql_database:
+        description: 'Deploy SQL Database'
+        type: boolean
+        default: false
+
+jobs:
+  deploy-development:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/azure-resources-template.yml
+    with:
+      resource_group_name: "example-rg-${{ github.event.inputs.environment || 'dev' }}"
+      environment: "${{ github.event.inputs.environment || 'dev' }}"
+      location: "East US"
+      deploy_app_service: ${{ github.event.inputs.deploy_app_service == 'true' || github.event.inputs.deploy_app_service == '' }}
+      app_service_name: "example-app-${{ github.event.inputs.environment || 'dev' }}"
+      app_service_plan_sku: "F1"
+      deploy_key_vault: ${{ github.event.inputs.deploy_key_vault == 'true' || github.event.inputs.deploy_key_vault == '' }}
+      key_vault_name: "example-kv-${{ github.event.inputs.environment || 'dev' }}"
+      deploy_storage_account: ${{ github.event.inputs.deploy_storage_account == 'true' }}
+      storage_account_name: "examplest${{ github.event.inputs.environment || 'dev' }}"
+      storage_account_type: "Standard_LRS"
+      deploy_sql_database: ${{ github.event.inputs.deploy_sql_database == 'true' }}
+      sql_server_name: "example-sql-${{ github.event.inputs.environment || 'dev' }}"
+      sql_database_name: "exampledb"
+      sql_admin_login: "azureuser"
+      terraform_version: "1.5.7"
+      working_directory: "./terraform"
+      auto_approve: false
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+      
+  deploy-staging:
+    if: github.event.inputs.environment == 'staging'
+    uses: ./.github/workflows/azure-resources-template.yml
+    with:
+      resource_group_name: "example-rg-staging"
+      environment: "staging"
+      location: "East US"
+      deploy_app_service: ${{ github.event.inputs.deploy_app_service == 'true' }}
+      app_service_name: "example-app-staging"
+      app_service_plan_sku: "B1"
+      deploy_key_vault: ${{ github.event.inputs.deploy_key_vault == 'true' }}
+      key_vault_name: "example-kv-staging"
+      deploy_storage_account: ${{ github.event.inputs.deploy_storage_account == 'true' }}
+      storage_account_name: "exampleststaging"
+      storage_account_type: "Standard_LRS"
+      deploy_sql_database: ${{ github.event.inputs.deploy_sql_database == 'true' }}
+      sql_server_name: "example-sql-staging"
+      sql_database_name: "exampledb"
+      sql_admin_login: "azureuser"
+      terraform_version: "1.5.7"
+      working_directory: "./terraform"
+      auto_approve: false
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+
+  deploy-production:
+    if: github.event.inputs.environment == 'prod'
+    uses: ./.github/workflows/azure-resources-template.yml
+    with:
+      resource_group_name: "example-rg-prod"
+      environment: "prod"
+      location: "East US"
+      deploy_app_service: ${{ github.event.inputs.deploy_app_service == 'true' }}
+      app_service_name: "example-app-prod"
+      app_service_plan_sku: "S1"
+      deploy_key_vault: ${{ github.event.inputs.deploy_key_vault == 'true' }}
+      key_vault_name: "example-kv-prod"
+      deploy_storage_account: ${{ github.event.inputs.deploy_storage_account == 'true' }}
+      storage_account_name: "examplestprod"
+      storage_account_type: "Standard_GRS"
+      deploy_sql_database: ${{ github.event.inputs.deploy_sql_database == 'true' }}
+      sql_server_name: "example-sql-prod"
+      sql_database_name: "exampledb"
+      sql_admin_login: "azureuser"
+      terraform_version: "1.5.7"
+      working_directory: "./terraform"
+      auto_approve: false
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}

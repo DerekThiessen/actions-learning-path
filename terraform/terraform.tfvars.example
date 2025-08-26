@@ -1,0 +1,28 @@
+# Example terraform.tfvars file
+# Copy this file and customize for your deployment
+
+# Required settings
+resource_group_name = "my-app-rg-dev"
+environment        = "dev"
+location          = "East US"
+
+# App Service settings (set deploy_app_service to true to enable)
+deploy_app_service   = true
+app_service_name     = "my-app-dev"
+app_service_plan_sku = "F1"
+
+# Key Vault settings (set deploy_key_vault to true to enable)
+deploy_key_vault = true
+key_vault_name   = "my-app-kv-dev"
+
+# Storage Account settings (set deploy_storage_account to true to enable)
+deploy_storage_account = false
+storage_account_name   = "myappstdev"
+storage_account_type   = "Standard_LRS"
+
+# SQL Database settings (set deploy_sql_database to true to enable)
+deploy_sql_database = false
+sql_server_name     = "my-app-sql-dev"
+sql_database_name   = "myappdb"
+sql_admin_login     = "dbadmin"
+# Note: sql_admin_password should be provided via GitHub secret, not in this file
